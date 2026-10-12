@@ -1,0 +1,10 @@
+[server]
+address = "0.0.0.0"   # accesible desde la red local (http://IP-DE-ESTA-PC:8501)
+port = 8501
+headless = true
+
+[client]
+toolbarMode = "minimal"
+
+[browser]
+gatherUsageStats = false

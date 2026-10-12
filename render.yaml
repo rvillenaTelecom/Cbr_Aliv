@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: cobranzas-aliv
+    runtime: docker
+    plan: starter        # 'free' se duerme tras 15 min sin uso
+    healthCheckPath: /_stcore/health
+    envVars:
+      - key: ALIV_SQL_SERVER      # ej. mi-servidor.database.windows.net
+        sync: false
+      - key: ALIV_SQL_DB
+        sync: false
+      - key: ALIV_SQL_USER
+        sync: false
+      - key: ALIV_SQL_PASSWORD
+        sync: false
+      - key: ALIV_USERS           # user:hash;user2:hash2  (hashes de make_user.py)
+        sync: false
