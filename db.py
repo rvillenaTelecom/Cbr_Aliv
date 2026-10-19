@@ -1,5 +1,6 @@
 """Conexión a SQL Server y transformación de ventas_aliv a formato largo (1 fila por cuota)."""
 import os
+import sys
 import urllib.parse
 
 import pandas as pd
@@ -12,7 +13,8 @@ DATABASE = os.getenv("ALIV_SQL_DB", "Aliv_DB")
 DRIVER = os.getenv("ALIV_SQL_DRIVER", "ODBC Driver 18 for SQL Server")
 SQL_USER = os.getenv("ALIV_SQL_USER")
 SQL_PASSWORD = os.getenv("ALIV_SQL_PASSWORD", "")
-CHARSET = os.getenv("ALIV_SQL_CHARSET", "cp1252")  # codificación de los varchar en la base
+# Codificación en que el driver entrega los varchar: en Windows es la página ANSI (cp1252); en Linux (Render) el driver ya los convierte a UTF-8.
+CHARSET = os.getenv("ALIV_SQL_CHARSET", "cp1252" if sys.platform == "win32" else "utf-8")
 
 # Solo las columnas que usa el dashboard (la tabla tiene 70+, con datos personales sensibles).
 COLS_VENTA = [
