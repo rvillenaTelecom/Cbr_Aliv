@@ -159,7 +159,7 @@ for colum, campo, titulo in ((m1, "Paquete", "Detalle paquete"), (m2, "Distrito"
         st.markdown(tabla_mora(fe, campo, titulo, int(minimo)), unsafe_allow_html=True)
 
 # ---------- Cuadro por equipo (supervisor) ----------
-seccion("Cuotas por equipo", "conteo de cuotas por estado de pago · ordenado por total")
+seccion("Cuotas por equipo", "conteo de cuotas y % sobre el total del equipo · ordenado por volumen")
 cuadro = (fe.pivot_table(index="Supervisor", columns="Estado", values="Monto", aggfunc="size", fill_value=0)
           .reindex(columns=ESTADOS, fill_value=0))
 cuadro["Total general"] = cuadro.sum(axis=1)
@@ -170,22 +170,36 @@ cuadro.columns = [c.title() if c in ESTADOS else c for c in cuadro.columns]
 
 
 def tabla_equipos(t: pd.DataFrame) -> str:
-    """Tabla HTML con encabezados de color, números centrados y total fijo al pie."""
+    """Tabla HTML con encabezados de color, conteo + % por fila, % sin pagar y total fijo al pie."""
     cols = list(t.columns)
-    colores = {**{e.title(): c for e, c in COLORES_ESTADO.items()}, "Total general": "#495057"}
+    colores = {**{e.title(): c for e, c in COLORES_ESTADO.items()}, "Total general": "#495057", "% sin pagar": "#8c2f39"}
     oscuro = {"Tercero Pago"}  # fondo claro -> texto oscuro
-    celda = lambda v: "" if v == 0 else f"{v:,.0f}"
+    sin_pagar = [e.title() for e in ("CHURN", "CLIENTE DE BAJA")]
+
+    def celdas(r) -> str:
+        """Conteo y, debajo, su % sobre el total de la fila; al final el % sin pagar (churn + baja)."""
+        tot = r["Total general"]
+        out = ""
+        for c in cols:
+            v = r[c]
+            if v == 0:
+                out += "<td></td>"
+            elif c == "Total general":
+                out += f"<td class='tg'>{v:,.0f}</td>"
+            else:
+                out += f"<td>{v:,.0f}<span class='pc'>{v / tot:.1%}</span></td>"
+        malos = sum(r[c] for c in sin_pagar)
+        out += f"<td class='tg sp'>{malos / tot:.1%}</td>" if tot else "<td></td>"
+        return out
+
     th = "".join(
-        f'<th style="background:{colores[c]};color:{"#0b2f2b" if c in oscuro else "#fff"}">{c}</th>' for c in cols
+        f'<th style="background:{colores[c]};color:{"#0b2f2b" if c in oscuro else "#fff"}">{c}</th>'
+        for c in cols + ["% sin pagar"]
     )
     filas = "".join(
-        f"<tr><td class='eq'>{html.escape(str(idx))}</td>"
-        + "".join(f"<td{' class=tg' if c == 'Total general' else ''}>{celda(r[c])}</td>" for c in cols)
-        + "</tr>"
-        for idx, r in t.iloc[:-1].iterrows()
+        f"<tr><td class='eq'>{html.escape(str(idx))}</td>{celdas(r)}</tr>" for idx, r in t.iloc[:-1].iterrows()
     )
-    pie = t.iloc[-1]
-    pie_html = "<tr><td class='eq'>Total general</td>" + "".join(f"<td>{celda(pie[c])}</td>" for c in cols) + "</tr>"
+    pie_html = f"<tr><td class='eq'>Total general</td>{celdas(t.iloc[-1])}</tr>"
     return f"""<style>
     .eqw{{max-height:520px;overflow:auto;border-radius:.7rem;border:1px solid rgba(128,128,128,.25)}}
     .eqt{{width:100%;border-collapse:separate;border-spacing:0;font-size:.92rem}}
@@ -195,6 +209,9 @@ def tabla_equipos(t: pd.DataFrame) -> str:
     .eqt td{{padding:.45rem .8rem;text-align:center;border-bottom:1px solid rgba(128,128,128,.15)}}
     .eqt td.eq{{text-align:left;white-space:nowrap}}
     .eqt td.tg{{font-weight:700;background:rgba(128,128,128,.12)}}
+    .eqt td.sp{{color:#e76f51}}
+    .eqt tfoot td.tg{{background:#1f2430}}
+    .eqt .pc{{display:block;font-size:.72rem;font-weight:400;opacity:.65;line-height:1.2}}
     .eqt tbody tr:nth-child(even) td{{background-color:rgba(128,128,128,.06)}}
     .eqt tbody tr:nth-child(even) td.tg{{background-color:rgba(128,128,128,.16)}}
     .eqt tbody tr:hover td{{background-color:rgba(200,89,15,.15)}}

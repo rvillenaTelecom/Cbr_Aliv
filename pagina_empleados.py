@@ -70,8 +70,28 @@ embudo = go.Figure(go.Funnel(
 embudo.update_yaxes(tickfont=dict(size=13))
 estilo(embudo, "Embudo de gestión de cobranza")
 
-g_llam = g.assign(Categoria=kpis.categoria_llamada(g["Estado llamada"])).dropna(subset=["Categoria"])
+seccion("Embudo y detalle por gestor", "de cuántos se llamó a cuántos realmente pagaron")
+# La gráfica por gestor se filtra por la fecha y hora de la llamada (Fecha Hora Historial LLamadas),
+# no por la fecha de alta: tiene su propio rango de fechas. Gestor y estado sí se respetan.
+llamadas_con_fecha = gestion["Fecha llamada"].dropna()
+l_min, l_max = llamadas_con_fecha.min().date(), llamadas_con_fecha.max().date()
+col_f, _ = st.columns([1, 2])
+rango_ll = col_f.date_input("Fecha de llamada (gráfica por gestor)", (max(l_min, l_max - pd.Timedelta(days=30)), l_max),
+                            min_value=l_min, max_value=l_max,
+                            help="La gráfica 'Resultado de la gestión por gestor' usa la fecha y hora de la llamada, no la fecha de alta.")
+if len(rango_ll) != 2:
+    st.info("Elige la fecha final del rango de llamadas.")
+    st.stop()
+
+gl = gestion[(gestion["Fecha llamada"] >= pd.Timestamp(rango_ll[0])) & (gestion["Fecha llamada"] < pd.Timestamp(rango_ll[1]) + pd.Timedelta(days=1))]
+if gestor:
+    gl = gl[gl["Gestor"].isin(gestor)]
+if estado:
+    gl = gl[gl["Estado (filtro)"].isin(estado)]
+g_llam = gl.assign(Categoria=kpis.categoria_llamada(gl["Estado llamada"])).dropna(subset=["Categoria"])
 por_gestor = g_llam.groupby(["Gestor", "Categoria"]).size().reset_index(name="Clientes")
+if por_gestor.empty:
+    por_gestor = pd.DataFrame({"Gestor": [], "Categoria": [], "Clientes": []})
 orden = por_gestor.groupby("Gestor")["Clientes"].sum().sort_values().index.tolist()  # el mayor queda arriba
 apilado = px.bar(por_gestor, y="Gestor", x="Clientes", color="Categoria", orientation="h", text="Clientes",
                  color_discrete_map=COLOR_LLAMADA, category_orders={"Gestor": orden, "Categoria": kpis.CATEGORIAS_LLAMADA})
@@ -82,7 +102,6 @@ apilado.update_layout(uniformtext_minsize=10, uniformtext_mode="hide", bargap=.3
                       legend=dict(orientation="h", yanchor="top", y=-0.1, xanchor="left", x=0, title_text="", font=dict(size=11)))
 estilo(apilado, "Resultado de la gestión por gestor").update_layout(margin=dict(l=8, r=8, t=64, b=40))
 
-seccion("Embudo y detalle por gestor", "de cuántos se llamó a cuántos realmente pagaron")
 with st.container(key="graficas"):
     c1, c2 = st.columns(2, gap="medium")
 with c1.container(border=True):
