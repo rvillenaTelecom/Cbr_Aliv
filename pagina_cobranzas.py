@@ -240,4 +240,50 @@ for n in (1, 2, 3):
     cfg[f"Fecha vencimiento M{n}"] = st.column_config.DateColumn(f"Vencimiento M{n}", format="DD/MM/YYYY")
     cfg[f"Fecha pago {n}"] = st.column_config.DateColumn(f"Fecha pago M{n}", format="DD/MM/YYYY")
 st.dataframe(gest, width="stretch", hide_index=True, column_config=cfg)
-st.download_button("Descargar CSV", gest.to_csv(index=False).encode("utf-8-sig"), "cartera_por_gestionar.csv")
+
+
+COLS_TEXTO = ("DNI/Carnet Extraj.", "Telefono contacto")  # códigos con ceros a la izquierda: deben tratarse como texto
+
+
+def csv_para_excel(df: pd.DataFrame) -> bytes:
+    """CSV para abrir en Excel con doble clic: separado por ';' (el separador de lista de Excel en español)
+    y con DNI/teléfono escritos como ="08306502" para que Excel conserve los ceros a la izquierda."""
+    out = df.copy()
+    for col in COLS_TEXTO:
+        if col in out:
+            out[col] = out[col].map(lambda x: x if pd.isna(x) or not str(x).strip() else '="' + str(x).strip().replace('"', "") + '"')
+    return out.to_csv(index=False, sep=";").encode("utf-8-sig")
+
+
+def xlsx_bytes(df: pd.DataFrame) -> bytes:
+    """Excel (.xlsx) con DNI/teléfono como texto (conserva los ceros), fechas y montos con formato y encabezado fijo."""
+    import io
+
+    buf = io.BytesIO()
+    with pd.ExcelWriter(buf, engine="openpyxl") as xw:
+        out = df.copy()
+        for col in COLS_TEXTO:
+            if col in out:
+                out[col] = out[col].map(lambda x: None if pd.isna(x) else str(x).strip())
+        out.to_excel(xw, index=False, sheet_name="Cartera")
+        ws = xw.sheets["Cartera"]
+        ws.freeze_panes = "A2"
+        for i, col in enumerate(out.columns, start=1):
+            letra = ws.cell(row=1, column=i).column_letter
+            ws.column_dimensions[letra].width = min(max(len(str(col)), int(out[col].astype(str).str.len().quantile(.95)) if len(out) else 10) + 2, 40)
+            if col in COLS_TEXTO:
+                for celda in ws[letra][1:]:
+                    celda.number_format = "@"
+            elif pd.api.types.is_datetime64_any_dtype(out[col]):
+                for celda in ws[letra][1:]:
+                    celda.number_format = "DD/MM/YYYY"
+            elif str(col).startswith(("Deuda",)):
+                for celda in ws[letra][1:]:
+                    celda.number_format = '"S/" #,##0.00'
+    return buf.getvalue()
+
+
+d1, d2, _ = st.columns([1, 1, 4])
+d1.download_button("Descargar CSV", csv_para_excel(gest), "cartera_por_gestionar.csv", mime="text/csv", width="stretch")
+d2.download_button("Descargar Excel", xlsx_bytes(gest), "cartera_por_gestionar.xlsx", width="stretch",
+                   mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
